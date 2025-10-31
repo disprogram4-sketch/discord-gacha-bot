@@ -50,18 +50,16 @@ const doc = new GoogleSpreadsheet(SHEET_ID, serviceAccountAuth);
 await doc.loadInfo();
 const sheet = doc.sheetsByIndex[0];
 
-// ✅ โหลดค่า GachaCount จากชีทเก็บไว้ใน Map ทันทีตอนเริ่มต้น
-await sheet.loadHeaderRow();
-const header = sheet.headerValues;
-const guildCol = header.indexOf("GuildID");
-const countCol = header.indexOf("GachaCount");
-
-for (let i = 1; i < sheet.rowCount; i++) {
-  const guildIdCell = sheet.getCell(i, guildCol);
-  const countCell = sheet.getCell(i, countCol);
-  const guildId = String(guildIdCell.value || "").trim();
-  const count = parseInt(countCell.value || 0);
-  if (guildId) gachaCountPerGuild.set(guildId, count);
+// ✅ เพิ่มแท็บสำหรับนับกาชาต่อเซิร์ฟ (ชื่อ "ServerCount")
+let sheetServer = doc.sheetsByTitle["ServerCount"];
+if (!sheetServer) {
+  sheetServer = await doc.addSheet({
+    title: "ServerCount",
+    headerValues: ["GuildID", "GachaCount"],
+  });
+  console.log("🆕 สร้างแท็บ ServerCount ใหม่เรียบร้อย!");
+} else {
+  console.log("📘 โหลดแท็บ ServerCount สำเร็จ!");
 }
 
 // ================================
@@ -241,22 +239,32 @@ client.on("interactionCreate", async (interaction) => {
     const newCount = currentCount + 1;
     gachaCountPerGuild.set(guildId, newCount);
 
-    // ✅ อัปเดตค่า GachaCount ใน Google Sheet ด้วย
-    await sheet.loadHeaderRow();
-    const header = sheet.headerValues;
-    const guildCol = header.indexOf("GuildID");
-    const countCol = header.indexOf("GachaCount");
+    // ✅ อัปเดตจำนวนกาชาต่อเซิร์ฟในแท็บ ServerCount
+    await sheetServer.loadCells(`A1:B${sheetServer.rowCount}`);
+    let foundRow = null;
 
-    for (let i = 1; i < sheet.rowCount; i++) {
-      const guildCell = sheet.getCell(i, guildCol);
+    for (let i = 1; i < sheetServer.rowCount; i++) {
+      const guildCell = sheetServer.getCell(i, 0);
       const guildValue = String(guildCell.value || "").trim();
-    if (guildValue === guildId) {
-      const countCell = sheet.getCell(i, countCol);
-      countCell.value = newCount;
-      break;
+      if (guildValue === guildId) {
+        foundRow = i;
+        break;
+      }
     }
+
+    if (foundRow !== null) {
+      // ถ้ามีอยู่แล้ว เพิ่ม +1
+      const countCell = sheetServer.getCell(foundRow, 1);
+      const newCountServer = (parseInt(countCell.value || 0) || 0) + 1;
+      countCell.value = newCountServer;
+      await sheetServer.saveUpdatedCells();
+      console.log(`🔢 อัปเดต GachaCount เซิร์ฟ ${guildId} เป็น ${newCountServer}`);
+    } else {
+      // ถ้ายังไม่มีเซิร์ฟนี้ในชีท → เพิ่มแถวใหม่
+      await sheetServer.addRow({ GuildID: guildId, GachaCount: 1 });
+      console.log(`🆕 เพิ่ม GuildID ${guildId} ใน ServerCount`);
     }
-    await sheet.saveUpdatedCells();
+
     const reward = randomReward();
 
     const newTotal = totalCoins - 1;
