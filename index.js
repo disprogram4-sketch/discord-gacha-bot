@@ -182,6 +182,7 @@ client.on("interactionCreate", async (interaction) => {
   // 🎰 กาชา (ใช้คอยน์ไล่จากแถวบนลงล่าง - Per Server)
   // ================================
   if (interaction.customId === "gacha") {
+    await interaction.deferReply({ ephemeral: false });
     const guildId = interaction.guild?.id || "DM";
     const currentCount = gachaCountPerGuild.get(guildId) || 0;
 
@@ -268,7 +269,7 @@ client.on("interactionCreate", async (interaction) => {
     const reward = randomReward();
 
     const newTotal = totalCoins - 1;
-    await interaction.reply({
+    await interaction.editReply({
       content: `🎲 ${interaction.user} หมุนกาชาได้ **${reward}**\n(หมุนครั้งที่ ${newCount}/${GACHA_LIMIT})\n💰 คอยน์คงเหลือ: ${newTotal}`,
     });
 
