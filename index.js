@@ -50,6 +50,20 @@ const doc = new GoogleSpreadsheet(SHEET_ID, serviceAccountAuth);
 await doc.loadInfo();
 const sheet = doc.sheetsByIndex[0];
 
+// ✅ โหลดค่า GachaCount จากชีทเก็บไว้ใน Map ทันทีตอนเริ่มต้น
+await sheet.loadHeaderRow();
+const header = sheet.headerValues;
+const guildCol = header.indexOf("GuildID");
+const countCol = header.indexOf("GachaCount");
+
+for (let i = 1; i < sheet.rowCount; i++) {
+  const guildIdCell = sheet.getCell(i, guildCol);
+  const countCell = sheet.getCell(i, countCol);
+  const guildId = String(guildIdCell.value || "").trim();
+  const count = parseInt(countCell.value || 0);
+  if (guildId) gachaCountPerGuild.set(guildId, count);
+}
+
 // ================================
 // ฟังก์ชันช่วย
 // ================================
@@ -226,6 +240,23 @@ client.on("interactionCreate", async (interaction) => {
     await sheet.saveUpdatedCells();
     const newCount = currentCount + 1;
     gachaCountPerGuild.set(guildId, newCount);
+
+    // ✅ อัปเดตค่า GachaCount ใน Google Sheet ด้วย
+    await sheet.loadHeaderRow();
+    const header = sheet.headerValues;
+    const guildCol = header.indexOf("GuildID");
+    const countCol = header.indexOf("GachaCount");
+
+    for (let i = 1; i < sheet.rowCount; i++) {
+      const guildCell = sheet.getCell(i, guildCol);
+      const guildValue = String(guildCell.value || "").trim();
+    if (guildValue === guildId) {
+      const countCell = sheet.getCell(i, countCol);
+      countCell.value = newCount;
+      break;
+    }
+    }
+    await sheet.saveUpdatedCells();
     const reward = randomReward();
 
     const newTotal = totalCoins - 1;
