@@ -60,6 +60,15 @@ if (!sheetServer) {
   console.log("🆕 สร้างแท็บ ServerCount ใหม่เรียบร้อย!");
 } else {
   console.log("📘 โหลดแท็บ ServerCount สำเร็จ!");
+  
+  // ✅ โหลดข้อมูล GachaCount จากแท็บ ServerCount ทันทีตอนบอทเริ่มทำงาน
+  const rows = await sheetServer.getRows();
+  for (const row of rows) {
+    const guildId = String(row.GuildID || "").trim();
+    const count = parseInt(row.GachaCount || 0);
+    if (guildId) gachaCountPerGuild.set(guildId, count);
+}
+console.log(`📊 โหลดค่า GachaCount จาก ServerCount แล้ว (${rows.length} เซิร์ฟ)`);
 }
 
 // ================================
@@ -87,7 +96,7 @@ const client = new Client({
   ],
 });
 
-client.once("clientReady", () => {
+client.once("ready", () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
@@ -148,9 +157,9 @@ client.on("messageCreate", async (msg) => {
   }
 
   // 🧩 คำสั่งรีเซ็ต
-  if (cmd === "!reset") {
-    if (msg.author.id !== OWNER_ID)
-      return msg.reply("เฉพาะเจ้าของเซิร์ฟเท่านั้นจ้า~");
+  const allowedUsers = [OWNER_ID, "880562159917088810"]; // ใส่ Discord ID เพิ่มได้
+    if (!allowedUsers.includes(msg.author.id))
+      return msg.reply("เฉพาะเจ้าของหรือแอดมินที่ได้รับสิทธิ์เท่านั้นจ้า~");
 
     const guildId = msg.guild?.id || "DM";
     gachaCountPerGuild.set(guildId, 0);
@@ -169,6 +178,29 @@ client.on("messageCreate", async (msg) => {
       console.error("❌ เกิดข้อผิดพลาดระหว่างลบข้อความ:", err);
       msg.channel.send("⚠️ เคลียร์ข้อความไม่สำเร็จ แต่รีเซ็ตโควต้าหมุนเรียบร้อยแล้วค่ะ~");
     }
+
+    // ✅ อัปเดตค่าในแท็บ ServerCount ให้กลับเป็น 0 ด้วย
+  await sheetServer.loadHeaderRow();
+  await sheetServer.loadCells(`A1:B${sheetServer.rowCount}`);
+  const guildColServer = sheetServer.headerValues.indexOf("GuildID");
+  const countColServer = sheetServer.headerValues.indexOf("GachaCount");
+  
+  let found = false;
+  for (let i = 1; i < sheetServer.rowCount; i++) {
+    const guildCell = sheetServer.getCell(i, guildColServer);
+    if (String(guildCell.value || "").trim() === guildId) {
+      sheetServer.getCell(i, countColServer).value = 0;
+      found = true;
+      break;
+  }
+}
+  if (found) {
+    await sheetServer.saveUpdatedCells();
+    msg.channel.send("🔄 รีเซ็ตจำนวนหมุนของเซิร์ฟนี้กลับเป็น 0 แล้วค่ะ 💫");
+}   else {
+    msg.channel.send("⚠️ ไม่พบเซิร์ฟนี้ในแท็บ ServerCount ค่ะ~");
+}
+    
   }
 });
 
