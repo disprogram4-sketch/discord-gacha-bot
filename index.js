@@ -266,13 +266,13 @@ const userRows = rows.filter(r =>
     // ✅ อัปเดตจำนวนกาชาต่อเซิร์ฟในแท็บ ServerCount
 // ✅ โหลด header สดใหม่ทุกครั้ง
 await sheetServer.loadHeaderRow();
-const rows = await sheetServer.getRows();
+const serverRows = await sheetServer.getRows();
 
 // ✅ แปลงทุกค่า GuildID ให้เป็น string + trim
 const normalizedGuildId = String(guildId).trim();
 let foundRow = null;
 
-for (const r of rows) {
+for (const r of serverRows) {
   const sheetGuildId = String(r.GuildID || "").trim();
   if (
     sheetGuildId === normalizedGuildId ||
@@ -308,7 +308,7 @@ if (foundRow) {
 
     // คำนวณใหม่จากข้อมูลจริง
     let remainingCoins = 0;
-    for (const row of userRows) {
+    for (const serverRows of userRows) {
       const value = parseInt(sheet.getCell(row.rowIndex, coinsCol).value || 0);
       remainingCoins += value;
     }
