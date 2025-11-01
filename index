@@ -156,10 +156,10 @@ client.on("messageCreate", async (msg) => {
     msg.reply("📋 เมนูหลักถูกสร้างแล้ว~ 💞");
   }
 
-  // 🧩 คำสั่งรีเซ็ต
-  const allowedUsers = [OWNER_ID, "880562159917088810"]; // ใส่ Discord ID เพิ่มได้
-    if (!allowedUsers.includes(msg.author.id))
-      return msg.reply("เฉพาะเจ้าของหรือแอดมินที่ได้รับสิทธิ์เท่านั้นจ้า~");
+  if (cmd === "!reset") {
+  const allowedUsers = [OWNER_ID, "880562159917088810"]; // เพิ่ม ID ได้ตรงนี้
+  if (!allowedUsers.includes(msg.author.id))
+    return msg.reply("เฉพาะเจ้าของหรือแอดมินที่ได้รับสิทธิ์เท่านั้นจ้า~");
 
     const guildId = msg.guild?.id || "DM";
     gachaCountPerGuild.set(guildId, 0);
@@ -179,20 +179,24 @@ client.on("messageCreate", async (msg) => {
       msg.channel.send("⚠️ เคลียร์ข้อความไม่สำเร็จ แต่รีเซ็ตโควต้าหมุนเรียบร้อยแล้วค่ะ~");
     }
 
-    // ✅ อัปเดตค่าในแท็บ ServerCount ให้กลับเป็น 0 ด้วย
-  await sheetServer.loadHeaderRow();
-  await sheetServer.loadCells(`A1:B${sheetServer.rowCount}`);
-  const guildColServer = sheetServer.headerValues.indexOf("GuildID");
-  const countColServer = sheetServer.headerValues.indexOf("GachaCount");
-  
-  let found = false;
-  for (let i = 1; i < sheetServer.rowCount; i++) {
-    const guildCell = sheetServer.getCell(i, guildColServer);
-    if (String(guildCell.value || "").trim() === guildId) {
-      sheetServer.getCell(i, countColServer).value = 0;
-      found = true;
-      break;
+   // ✅ อัปเดตค่าในแท็บ ServerCount ให้กลับเป็น 0 ด้วย
+const rows = await sheetServer.getRows();
+let found = false;
+
+for (const row of rows) {
+  if (String(row.GuildID || "").trim() === guildId) {
+    row.GachaCount = 0;
+    await row.save();
+    found = true;
+    break;
   }
+}
+
+if (!found) {
+  await sheetServer.addRow({ GuildID: guildId, GachaCount: 0 });
+}
+
+msg.channel.send("🔄 รีเซ็ตจำนวนหมุนของเซิร์ฟนี้กลับเป็น 0 แล้วค่ะ 💫");
 }
   if (found) {
     await sheetServer.saveUpdatedCells();
@@ -238,24 +242,27 @@ client.on("interactionCreate", async (interaction) => {
       }
     }
 
-    if (userRows.length === 0)
-      return interaction.reply({
+    if (userRows.length === 0) {
+      await interaction.editReply({
         content: "❌ ยังไม่มีข้อมูลของคุณในระบบ ลองเติมก่อนนะ 💚",
-        ephemeral: true,
       });
+      return;
+    }
 
-    const totalCoins = userRows.reduce((sum, r) => sum + r.coins, 0);
-    if (totalCoins < 1)
-      return interaction.reply({
+    if (totalCoins < 1) {
+      await interaction.editReply({
         content: "❌ คุณไม่มีคอยน์เพียงพอ!",
-        ephemeral: true,
       });
+      return;
+    }
+    );
 
-    if (currentCount >= GACHA_LIMIT)
-      return interaction.reply({
+    if (currentCount >= GACHA_LIMIT) {
+      await interaction.editReply({
         content: "🔒 ครบโควต้า 5 ครั้งแล้ว รอรีเซ็ตก่อนนะ 💚",
-        ephemeral: true,
       });
+      return;
+    }
 
     let remainingToUse = 1;
     for (const row of userRows) {
@@ -273,30 +280,24 @@ client.on("interactionCreate", async (interaction) => {
     gachaCountPerGuild.set(guildId, newCount);
 
     // ✅ อัปเดตจำนวนกาชาต่อเซิร์ฟในแท็บ ServerCount
-    await sheetServer.loadCells(`A1:B${sheetServer.rowCount}`);
-    let foundRow = null;
+    const rows = await sheetServer.getRows();
+    let foundRow = false;
 
-    for (let i = 1; i < sheetServer.rowCount; i++) {
-      const guildCell = sheetServer.getCell(i, 0);
-      const guildValue = String(guildCell.value || "").trim();
-      if (guildValue === guildId) {
-        foundRow = i;
+    for (const row of rows) {
+      if (String(row.GuildID || "").trim() === guildId) {
+        row.GachaCount = (parseInt(row.GachaCount || 0) || 0) + 1;
+        await row.save();
+        foundRow = true;
+        console.log(`🔢 อัปเดต GachaCount เซิร์ฟ ${guildId} เป็น ${row.GachaCount}`);
         break;
       }
     }
 
-    if (foundRow !== null) {
-      // ถ้ามีอยู่แล้ว เพิ่ม +1
-      const countCell = sheetServer.getCell(foundRow, 1);
-      const newCountServer = (parseInt(countCell.value || 0) || 0) + 1;
-      countCell.value = newCountServer;
-      await sheetServer.saveUpdatedCells();
-      console.log(`🔢 อัปเดต GachaCount เซิร์ฟ ${guildId} เป็น ${newCountServer}`);
-    } else {
-      // ถ้ายังไม่มีเซิร์ฟนี้ในชีท → เพิ่มแถวใหม่
+    if (!foundRow) {
       await sheetServer.addRow({ GuildID: guildId, GachaCount: 1 });
       console.log(`🆕 เพิ่ม GuildID ${guildId} ใน ServerCount`);
     }
+
 
     const reward = randomReward();
 
