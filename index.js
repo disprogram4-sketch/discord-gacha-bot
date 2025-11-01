@@ -180,25 +180,29 @@ client.on("messageCreate", async (msg) => {
     }
 
    // ✅ อัปเดตค่าในแท็บ ServerCount ให้กลับเป็น 0 ด้วย
-const rows = await sheetServer.getRows();
-let found = false;
+    const rows = await sheetServer.getRows();
+    let foundRow = null;
 
-for (const row of rows) {
-  if (String(row.GuildID || "").trim() === guildId) {
-    row.GachaCount = 0;
-    await row.save();
-    found = true;
-    break;
+    for (const row of rows) {
+      if (String(row.GuildID).trim() === String(guildId).trim()) {
+        foundRow = row;
+          break;
+      }
+    }
+
+    if (foundRow) {
+      foundRow.GachaCount = 0;
+      await foundRow.save();
+      gachaCountPerGuild.set(guildId, 0);
+      msg.channel.send("🔄 รีเซ็ตจำนวนหมุนของเซิร์ฟนี้กลับเป็น 0 แล้วค่ะ 💫");
+      console.log(`♻️ รีเซ็ต GachaCount เซิร์ฟ ${guildId} เป็น 0`);
+    } else {
+      await sheetServer.addRow({ GuildID: guildId, GachaCount: 0 });
+      gachaCountPerGuild.set(guildId, 0);
+      msg.channel.send("🆕 เพิ่ม Guild ใหม่พร้อมรีเซ็ตค่า 0 แล้วค่ะ 💚");
+    }
   }
-}
-
-if (!found) {
-  await sheetServer.addRow({ GuildID: guildId, GachaCount: 0 });
-}
-
-msg.channel.send("🔄 รีเซ็ตจำนวนหมุนของเซิร์ฟนี้กลับเป็น 0 แล้วค่ะ 💫");
-}
-  });
+});
 
 // ================================
 // การตอบเมื่อกดปุ่ม
@@ -273,23 +277,26 @@ client.on("interactionCreate", async (interaction) => {
 
     // ✅ อัปเดตจำนวนกาชาต่อเซิร์ฟในแท็บ ServerCount
     const rows = await sheetServer.getRows();
-    let foundRow = false;
+    let foundRow = null;
 
     for (const row of rows) {
-      if (String(row.GuildID || "").trim() === guildId) {
-        row.GachaCount = (parseInt(row.GachaCount || 0) || 0) + 1;
-        await row.save();
-        foundRow = true;
-        console.log(`🔢 อัปเดต GachaCount เซิร์ฟ ${guildId} เป็น ${row.GachaCount}`);
+      if (String(row.GuildID).trim() === String(guildId).trim()) {
+        foundRow = row;
         break;
       }
     }
 
-    if (!foundRow) {
+    if (foundRow) {
+      const current = parseInt(foundRow.GachaCount || 0) || 0;
+      foundRow.GachaCount = current + 1;
+      await foundRow.save();
+      gachaCountPerGuild.set(guildId, current + 1);
+      console.log(`🔢 อัปเดต GachaCount เซิร์ฟ ${guildId} → ${current + 1}`);
+    } else {
       await sheetServer.addRow({ GuildID: guildId, GachaCount: 1 });
-      console.log(`🆕 เพิ่ม GuildID ${guildId} ใน ServerCount`);
+      gachaCountPerGuild.set(guildId, 1);
+      console.log(`🆕 เพิ่ม GuildID ${guildId} และตั้งค่า GachaCount = 1`);
     }
-
 
     const reward = randomReward();
 
