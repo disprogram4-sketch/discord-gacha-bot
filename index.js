@@ -50,7 +50,7 @@ const doc = new GoogleSpreadsheet(SHEET_ID, serviceAccountAuth);
 await doc.loadInfo();
 const sheet = doc.sheetsByIndex[0];
 
-// ✅ เพิ่มแท็บสำหรับนับกาชาต่อเซิร์ฟ (ชื่อ "ServerCount")
+// ✅ เพิ่ม/โหลดแท็บสำหรับนับกาชาต่อเซิร์ฟ (ชื่อ "ServerCount")
 let sheetServer = doc.sheetsByTitle["ServerCount"];
 if (!sheetServer) {
   sheetServer = await doc.addSheet({
@@ -60,18 +60,15 @@ if (!sheetServer) {
   console.log("🆕 สร้างแท็บ ServerCount ใหม่เรียบร้อย!");
 } else {
   console.log("📘 โหลดแท็บ ServerCount สำเร็จ!");
-  
-  // ✅ โหลดข้อมูล GachaCount จากแท็บ ServerCount ทันทีตอนบอทเริ่มทำงาน
-   await sheetServer.loadHeaderRow();
-  const rows = await sheetServer.getRows();
-  for (const row of rows) {
-    const guildId = String(row.GuildID || "").trim();
+  await sheetServer.loadHeaderRow();
+  const rowsAtBoot = await sheetServer.getRows();
+  for (const row of rowsAtBoot) {
+    const gid = String(row.GuildID || "").trim();
     const count = parseInt(row.GachaCount || 0);
-    if (guildId && !isNaN(count)) {
-      gachaCountPerGuild.set(guildId, count);
-    }
+    if (!gid || gid === "GuildID" || isNaN(count)) continue;
+    gachaCountPerGuild.set(gid, count);
   }
-  console.log(`📊 โหลดค่า GachaCount จาก ServerCount แล้ว (${rows.length} เซิร์ฟ)`)
+  console.log(`📊 โหลดค่า GachaCount จาก ServerCount แล้ว (${rowsAtBoot.length} เซิร์ฟ)`);
 }
 
 // ================================
@@ -85,6 +82,9 @@ function randomReward() {
     if (rand <= cumulative) return reward.name;
   }
   return rewards[rewards.length - 1].name;
+}
+function normId(v) {
+  return String(v ?? "").trim();
 }
 
 // ================================
@@ -104,241 +104,185 @@ client.once("ready", () => {
 });
 
 // ================================
-// สร้างเมนูปุ่ม
+// สร้างเมนูปุ่ม + รีเซ็ต
 // ================================
 client.on("messageCreate", async (msg) => {
   if (msg.author.bot) return;
   const args = msg.content.split(" ");
-  const cmd = args[0].toLowerCase();
+  const cmd = (args[0] || "").toLowerCase();
 
-  // 🧩 คำสั่งสร้างเมนู
   // 🧩 คำสั่งสร้างเมนู
   if (cmd === "!menu" && msg.author.id === OWNER_ID) {
     const embed = new EmbedBuilder()
       .setTitle("💖 กาชาสุ่มงาน ART + ไทป์งานจิบิเส้นรัฟ 💖")
       .setDescription(`
-  ครั้งละ **1 เหรียญ**  
-  (1 เหรียญ = 50THB)
+ครั้งละ **1 เหรียญ**  (1 เหรียญ = 50THB)
 
-  🎨 **ไทป์งานจิบิเส้นรัฟ**
+🎨 **ไทป์งานจิบิเส้นรัฟ**
 
-  งานที่มีโอกาสได้รับ
-  [ รางวัล ]
-  • หัวอกเส้นรัฟ (50%)  
-  • ครึ่งตัวเส้นรัฟ (40%)  
-  • เต็มตัวเส้นรัฟ (10%)  
-  • เกลือนะคะ (10%)
+[ รางวัล ]
+• หัวอกเส้นรัฟ (50%)
+• ครึ่งตัวเส้นรัฟ (40%)
+• เต็มตัวเส้นรัฟ (10%)
+• เกลือนะคะ (10%)
 
-  [ รางวัลเพิ่มเติม ]
-  • หัวอกสีเรียบ (5%)  
-  • เต็มตัวสีเรียบ (2%)
+[ รางวัลเพิ่มเติม ]
+• หัวอกสีเรียบ (5%)
+• เต็มตัวสีเรียบ (2%)
 
-  หลังจากได้รับรางวัลสามารถเปิด ticket เพื่อแจ้งรายการ, กดกาชา และบรีฟงานได้ทันที 💌  
+หลังจากได้รับรางวัลสามารถเปิด ticket เพื่อแจ้งรายการ, กดกาชา และบรีฟงานได้ทันที 💌
 
-  :❀ *ช่องทางการเติมเหรียญ:* ⁠『🍀』ช่องทางการโอนเงิน → <#1428514376998195303>  
-  :❀ *ดูรายละเอียดเพิ่มเติมได้ที่:* ⁠📃┊รายละเอียดก่อนกดกาชา → <#1429514927080476784>  
-  :❀ *หลังจากได้รางวัลเปิด:* ⁠『🎫』ᴛɪᴄᴋᴇᴛ → <#1428514321931042866>
-      `)
+:❀ *ช่องทางการเติมเหรียญ:* ⁠『🍀』ช่องทางการโอนเงิน → <#1428514376998195303>
+:❀ *ดูรายละเอียดเพิ่มเติมได้ที่:* ⁠📃┊รายละเอียดก่อนกดกาชา → <#1429514927080476784>
+:❀ *หลังจากได้รางวัลเปิด:* ⁠『🎫』ᴛɪᴄᴋᴇᴛ → <#1428514321931042866>
+      `);
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("gacha")
-        .setLabel("🔑 สุ่มของ")
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId("balance")
-        .setLabel("💎 เช็คยอดเงิน")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId("slip")
-        .setLabel("🪙 เติมเหรียญ")
-        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("gacha").setLabel("🔑 สุ่มของ").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("balance").setLabel("💎 เช็คยอดเงิน").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("slip").setLabel("🪙 เติมเหรียญ").setStyle(ButtonStyle.Success),
     );
 
     await msg.channel.send({ embeds: [embed], components: [row] });
-    msg.reply("📋 เมนูหลักถูกสร้างแล้ว~ 💞");
+    await msg.reply("📋 เมนูหลักถูกสร้างแล้ว~ 💞");
   }
 
+  // 🔄 รีเซ็ต
   if (cmd === "!reset") {
-  const allowedUsers = [OWNER_ID, "880562159917088810"]; // เพิ่ม ID ได้ตรงนี้
-  if (!allowedUsers.includes(msg.author.id))
-    return msg.reply("เฉพาะเจ้าของหรือแอดมินที่ได้รับสิทธิ์เท่านั้นจ้า~");
+    const allowedUsers = [OWNER_ID, "880562159917088810"];
+    if (!allowedUsers.includes(msg.author.id))
+      return msg.reply("เฉพาะเจ้าของหรือแอดมินที่ได้รับสิทธิ์เท่านั้นจ้า~");
 
     const guildId = msg.guild?.id || "DM";
     gachaCountPerGuild.set(guildId, 0);
 
-    // 🧹 ลบข้อความกาชาทั้งหมดในช่องนั้น
+    // 🧹 ลบข้อความผลกาชาในช่องนี้ (ถ้ามี)
     try {
-      const fetchedMessages = await msg.channel.messages.fetch({ limit: 100 });
-      const gachaMessages = fetchedMessages.filter(m =>
-        m.author.id === client.user.id && m.content.includes("หมุนกาชาได้")
+      const fetched = await msg.channel.messages.fetch({ limit: 100 });
+      const gachaMessages = fetched.filter(
+        (m) => m.author.id === client.user.id && /หมุนกาชาได้/.test(m.content || "")
       );
-
-      for (const [id, message] of gachaMessages) {
-        await message.delete().catch(() => {});
-      }
+      for (const [, m] of gachaMessages) await m.delete().catch(() => {});
     } catch (err) {
       console.error("❌ เกิดข้อผิดพลาดระหว่างลบข้อความ:", err);
-      msg.channel.send("⚠️ เคลียร์ข้อความไม่สำเร็จ แต่รีเซ็ตโควต้าหมุนเรียบร้อยแล้วค่ะ~");
+      await msg.channel.send("⚠️ เคลียร์ข้อความไม่สำเร็จ แต่รีเซ็ตโควต้าหมุนเรียบร้อยแล้วค่ะ~");
     }
 
-   // ✅ อัปเดตค่าในแท็บ ServerCount ให้กลับเป็น 0 ด้วย
+    // ✅ อัปเดต ServerCount = 0 (อัปเดตแถวเดิมเท่านั้น)
     await sheetServer.loadHeaderRow();
-    const rows = await sheetServer.getRows();
-    const foundRow = rows.find(r => String(r.GuildID || "").trim() === String(guildId).trim());
+    const serverRows = await sheetServer.getRows();
+    const gidNorm = normId(guildId);
+    let foundRow = null;
+    for (const r of serverRows) {
+      const sgid = normId(r.GuildID);
+      if (sgid === gidNorm || sgid == guildId) {
+        foundRow = r;
+        break;
+      }
+    }
 
     if (foundRow) {
       foundRow.GachaCount = 0;
       await foundRow.save();
-      gachaCountPerGuild.set(guildId, 0);
-      msg.channel.send("🔄 รีเซ็ตจำนวนหมุนของเซิร์ฟนี้กลับเป็น 0 แล้วค่ะ 💫");
+      await msg.channel.send("🔄 รีเซ็ตจำนวนหมุนของเซิร์ฟนี้กลับเป็น 0 แล้วค่ะ 💫");
       console.log(`♻️ รีเซ็ต GachaCount เซิร์ฟ ${guildId} เป็น 0`);
     } else {
-      await sheetServer.addRow({
-        GuildID: String(guildId).trim(),
-        GachaCount: 0
-      });
-      gachaCountPerGuild.set(guildId, 0);
-      msg.channel.send("🆕 เพิ่ม Guild ใหม่พร้อมรีเซ็ตค่า 0 แล้วค่ะ 💚");
-    }
+      await sheetServer.addRow({ GuildID: gidNorm, GachaCount: 0 });
+      await msg.channel.send("🆕 เพิ่ม Guild ใหม่พร้อมรีเซ็ตค่า 0 แล้วค่ะ 💚");
     }
   }
-);
+});
 
 // ================================
-// การตอบเมื่อกดปุ่ม
+/* การตอบเมื่อกดปุ่ม */
 // ================================
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton()) return;
 
   // ================================
-  // 🎰 กาชา (ใช้คอยน์ไล่จากแถวบนลงล่าง - Per Server)
+  // 🎰 กาชา
   // ================================
   if (interaction.customId === "gacha") {
     await interaction.deferReply({ ephemeral: false });
     const guildId = interaction.guild?.id || "DM";
     const currentCount = gachaCountPerGuild.get(guildId) || 0;
 
-   // ✅ ใช้ getRows() แทน loadCells()
-const rows = await sheet.getRows();
-const userRows = rows.filter(r =>
-  String(r.User || "").trim() === String(interaction.user.id) &&
-  String(r.GuildID || "").trim() === guildId
-);
-
-if (userRows.length === 0) {
-  await interaction.editReply({
-    content: "❌ ยังไม่มีข้อมูลของคุณในระบบ ลองเติมก่อนนะ 💚",
-  });
-  return;
-}
-
-const totalCoins = userRows.reduce((sum, r) => sum + parseInt(r.Coins || 0), 0);
-
-    const userRows = [];
-    for (let i = 1; i < sheet.rowCount; i++) {
-      const userCell = sheet.getCell(i, userCol);
-      const guildCell = sheet.getCell(i, guildCol);
-      const userValue = String(userCell.value || "").trim();
-      const guildValue = String(guildCell.value || "").trim();
-      
-      if (userValue === String(interaction.user.id) && guildValue === guildId) {
-        const coins = parseInt(sheet.getCell(i, coinsCol).value || 0);
-        userRows.push({ rowIndex: i, coins });
-      }
-    }
+    // ดึงรายการของผู้ใช้ในเซิร์ฟนี้ (เร็ว ไม่ค้าง)
+    const rows = await sheet.getRows();
+    const userRows = rows.filter(
+      (r) => normId(r.User) === normId(interaction.user.id) && normId(r.GuildID) === normId(guildId)
+    );
 
     if (userRows.length === 0) {
-      await interaction.editReply({
-        content: "❌ ยังไม่มีข้อมูลของคุณในระบบ ลองเติมก่อนนะ 💚",
-      });
+      await interaction.editReply("❌ ยังไม่มีข้อมูลของคุณในระบบ ลองเติมก่อนนะ 💚");
       return;
     }
 
-  const totalCoins = userRows.reduce((sum, r) => sum + r.coins, 0);
+    const totalCoins = userRows.reduce((sum, r) => sum + (parseInt(r.Coins || 0) || 0), 0);
     if (totalCoins < 1) {
-      await interaction.editReply({
-        content: "❌ คุณไม่มีคอยน์เพียงพอ!",
-      });
+      await interaction.editReply("❌ คุณไม่มีคอยน์เพียงพอ!");
       return;
     }
 
     if (currentCount >= GACHA_LIMIT) {
-      await interaction.editReply({
-        content: "🔒 ครบโควต้า 5 ครั้งแล้ว รอรีเซ็ตก่อนนะ 💚",
-      });
+      await interaction.editReply("🔒 ครบโควต้า 5 ครั้งแล้ว รอรีเซ็ตก่อนนะ 💚");
       return;
     }
 
-    let remainingToUse = 1;
-    for (const row of userRows) {
-      if (remainingToUse <= 0) break;
-      const available = row.coins;
+    // หัก 1 คอยน์ ไล่จากบนลงล่าง
+    let need = 1;
+    for (const r of userRows) {
+      if (need <= 0) break;
+      const available = parseInt(r.Coins || 0) || 0;
       if (available > 0) {
-        const deduct = Math.min(available, remainingToUse);
-        sheet.getCell(row.rowIndex, coinsCol).value = available - deduct;
-        remainingToUse -= deduct;
+        const deduct = Math.min(available, need);
+        r.Coins = available - deduct;
+        await r.save();
+        need -= deduct;
       }
     }
 
-    await sheet.saveUpdatedCells();
-    const newCount = currentCount + 1;
+    // อัปเดตจำนวนหมุนต่อเซิร์ฟใน ServerCount (อัปเดตแถวเดิม ไม่เพิ่มใหม่)
+    await sheetServer.loadHeaderRow();
+    const serverRows = await sheetServer.getRows();
+    const gidNorm = normId(guildId);
+    let foundRow = null;
+    for (const r of serverRows) {
+      const sgid = normId(r.GuildID);
+      if (sgid === gidNorm || sgid == guildId) {
+        foundRow = r;
+        break;
+      }
+    }
+
+    let newCount = currentCount + 1;
+    if (foundRow) {
+      const cur = parseInt(foundRow.GachaCount || 0) || 0;
+      foundRow.GachaCount = cur + 1;
+      await foundRow.save();
+      newCount = cur + 1;
+    } else {
+      await sheetServer.addRow({ GuildID: gidNorm, GachaCount: 1 });
+      newCount = 1;
+    }
     gachaCountPerGuild.set(guildId, newCount);
-
-    // ✅ อัปเดตจำนวนกาชาต่อเซิร์ฟในแท็บ ServerCount
-// ✅ โหลด header สดใหม่ทุกครั้ง
-await sheetServer.loadHeaderRow();
-const rows = await sheetServer.getRows();
-
-// ✅ แปลงทุกค่า GuildID ให้เป็น string + trim
-const normalizedGuildId = String(guildId).trim();
-let foundRow = null;
-
-for (const r of rows) {
-  const sheetGuildId = String(r.GuildID || "").trim();
-  if (
-    sheetGuildId === normalizedGuildId ||
-    sheetGuildId === guildId || // กันกรณี type ไม่ตรง
-    sheetGuildId == guildId // == เผื่อ numeric string
-  ) {
-    foundRow = r;
-    break;
-  }
-}
-
-if (foundRow) {
-  // ✅ ถ้ามีอยู่แล้ว อัปเดตแทนเพิ่มใหม่
-  const current = parseInt(foundRow.GachaCount || 0) || 0;
-  foundRow.GachaCount = current + 1;
-  await foundRow.save();
-  gachaCountPerGuild.set(guildId, current + 1);
-  console.log(`🔢 อัปเดต GachaCount เซิร์ฟ ${guildId} → ${current + 1}`);
-} else {
-  // ✅ ถ้าไม่มีจริง ๆ (เช่น เซิร์ฟใหม่)
-  await sheetServer.addRow({
-    GuildID: normalizedGuildId,
-    GachaCount: 1,
-  });
-  gachaCountPerGuild.set(guildId, 1);
-  console.log(`🆕 เพิ่ม GuildID ${normalizedGuildId} และตั้งค่า GachaCount = 1`);
-}
-
 
     const reward = randomReward();
 
-   await sheet.saveUpdatedCells();
+    // คำนวณคอยน์คงเหลือจากข้อมูลจริงหลังเซฟ
+    const rowsAfter = await sheet.getRows();
+    const myRowsAfter = rowsAfter.filter(
+      (r) => normId(r.User) === normId(interaction.user.id) && normId(r.GuildID) === gidNorm
+    );
+    const remaining = myRowsAfter.reduce((s, r) => s + (parseInt(r.Coins || 0) || 0), 0);
 
-    // คำนวณใหม่จากข้อมูลจริง
-    let remainingCoins = 0;
-    for (const row of userRows) {
-      const value = parseInt(sheet.getCell(row.rowIndex, coinsCol).value || 0);
-      remainingCoins += value;
+    await interaction.editReply(
+      `🎲 ${interaction.user} หมุนกาชาได้ **${reward}**\n(หมุนครั้งที่ ${newCount}/${GACHA_LIMIT})\n💰 คอยน์คงเหลือ: ${remaining}`
+    );
+
+    if (newCount === GACHA_LIMIT) {
+      interaction.channel.send("🔒 ครบ 5 ครั้งแล้ว รอบนี้ถูกล็อกไว้จนกว่าเจ้าของจะรีเซ็ตค่ะ 💚");
     }
-
-    if (newCount === GACHA_LIMIT)
-      interaction.channel.send(
-        "🔒 ครบ 5 ครั้งแล้ว รอบนี้ถูกล็อกไว้จนกว่าเจ้าของจะรีเซ็ตค่ะ 💚",
-      );
   }
 
   // ================================
@@ -349,35 +293,16 @@ if (foundRow) {
       await interaction.deferReply({ ephemeral: true });
       const guildId = interaction.guild?.id || "DM";
 
-      await sheet.loadHeaderRow();
-      await sheet.loadCells(`A1:H${sheet.rowCount}`);
-      const header = sheet.headerValues;
-      const userCol = header.indexOf("User");
-      const coinsCol = header.indexOf("Coins");
-      const guildCol = header.indexOf("GuildID");
+      const rows = await sheet.getRows();
+      const mine = rows.filter(
+        (r) => normId(r.User) === normId(interaction.user.id) && normId(r.GuildID) === normId(guildId)
+      );
+      const total = mine.reduce((s, r) => s + (parseInt(r.Coins || 0) || 0), 0);
 
-      let totalCoins = 0;
-      for (let i = 1; i < sheet.rowCount; i++) {
-        const userCell = sheet.getCell(i, userCol);
-        const coinsCell = sheet.getCell(i, coinsCol);
-        const guildCell = sheet.getCell(i, guildCol);
-        const userValue = String(userCell.value || "").trim();
-        const guildValue = String(guildCell.value || "").trim();
-
-        if (userValue === String(interaction.user.id) && guildValue === guildId) {
-          const coins = parseInt(coinsCell.value || 0);
-          totalCoins += coins;
-        }
-      }
-
-      await interaction.editReply({
-        content: `💰 คุณมีทั้งหมด **${totalCoins} coins** ในเซิร์ฟเวอร์นี้ค่ะ 💎`,
-      });
+      await interaction.editReply(`💰 คุณมีทั้งหมด **${total} coins** ในเซิร์ฟเวอร์นี้ค่ะ 💎`);
     } catch (err) {
       console.error("❌ Balance check error:", err);
-      await interaction.editReply({
-        content: "⚠️ เกิดข้อผิดพลาดตอนดึงยอดเงิน ลองใหม่อีกทีนะคะ 💚",
-      });
+      await interaction.editReply("⚠️ เกิดข้อผิดพลาดตอนดึงยอดเงิน ลองใหม่อีกทีนะคะ 💚");
     }
   }
 
@@ -388,21 +313,13 @@ if (foundRow) {
     try {
       const guildId = interaction.guild?.id;
       const guildName = interaction.guild?.name || "Unknown Server";
-      
-      userGuildMap.set(interaction.user.id, {
-        guildId: guildId,
-        guildName: guildName,
-        channelId: interaction.channel.id
-      });
-      
+      userGuildMap.set(interaction.user.id, { guildId, guildName, channelId: interaction.channel.id });
+
       const dm = await interaction.user.createDM();
       await dm.send(
-        `💵 ส่งสลิปสำหรับเซิร์ฟเวอร์: **${guildName}**\n\nพิมพ์ยอดเงิน เช่น \`!slip 100\` พร้อมแนบรูปสลิป 💚`,
+        `💵 ส่งสลิปสำหรับเซิร์ฟเวอร์: **${guildName}**\n\nพิมพ์ยอดเงิน เช่น \`!slip 100\` พร้อมแนบรูปสลิป 💚`
       );
-      await interaction.reply({
-        content: "📩 ทักไปใน DM แล้วน้า~ ไปเปิดดูได้เลย 💚",
-        ephemeral: true,
-      });
+      await interaction.reply({ content: "📩 ทักไปใน DM แล้วน้า~ ไปเปิดดูได้เลย 💚", ephemeral: true });
     } catch {
       await interaction.reply({
         content:
@@ -424,17 +341,15 @@ client.on("messageCreate", async (msg) => {
   const amount = parseFloat(args[1]);
   const slip = msg.attachments.first();
 
-  if (!amount || !slip)
-    return msg.reply("❌ โปรดพิมพ์ยอดเงินและแนบรูป เช่น `!slip 100` 💵");
+  if (!amount || !slip) return msg.reply("❌ โปรดพิมพ์ยอดเงินและแนบรูป เช่น `!slip 100` 💵");
 
   const userGuildInfo = userGuildMap.get(msg.author.id);
-  
   if (!userGuildInfo) {
     return msg.reply("❌ ไม่พบข้อมูลเซิร์ฟเวอร์ โปรดกดปุ่ม 💵 เติมเงิน ในเซิร์ฟเวอร์ก่อนส่งสลิปนะคะ");
   }
 
   const { guildId, guildName, channelId } = userGuildInfo;
-  
+
   await sheet.addRow({
     User: msg.author.id,
     Username: msg.author.username,
@@ -446,20 +361,16 @@ client.on("messageCreate", async (msg) => {
     Date: new Date().toLocaleString(),
   });
 
-  await msg.reply(
-    `📤 ได้รับสลิปสำหรับ **${guildName}** เรียบร้อย!\nยอด: ${amount} บาท 💚 รอแอดมินตรวจยืนยันนะคะ`,
-  );
+  await msg.reply(`📤 ได้รับสลิปสำหรับ **${guildName}** เรียบร้อย!\nยอด: ${amount} บาท 💚 รอแอดมินตรวจยืนยันนะคะ`);
 
   try {
-    // ดึงข้อมูลเซิร์ฟที่ผู้ใช้กดเติมเงิน
     const guild = await client.guilds.fetch(guildId);
 
-    // ใช้ค่า ADMIN_CHANNEL_ID จาก .env ถ้ามี
     let adminChannel = null;
     if (ADMIN_CHANNEL_ID) {
       try {
         adminChannel = await guild.channels.fetch(ADMIN_CHANNEL_ID);
-        console.log(`📩 แจ้งเตือนไปห้องแอดมิน ${adminChannel.name} (${guild.name})`);
+        console.log(`📩 แจ้งเตือนไปห้องแอดมิน ${adminChannel?.name} (${guild.name})`);
       } catch {
         console.warn("⚠️ ไม่พบห้องแอดมินที่ตั้งไว้ ใช้ห้องที่ผู้ใช้กดแทน");
         adminChannel = await guild.channels.fetch(channelId);
@@ -478,14 +389,8 @@ client.on("messageCreate", async (msg) => {
         .setColor(0x3498db);
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`approve_${msg.author.id}_${amount}_${guildId}`)
-          .setLabel("✅ ยืนยัน")
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setCustomId(`reject_${msg.author.id}_${guildId}`)
-          .setLabel("❌ ปฏิเสธ")
-          .setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId(`approve_${msg.author.id}_${amount}_${guildId}`).setLabel("✅ ยืนยัน").setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`reject_${msg.author.id}_${guildId}`).setLabel("❌ ปฏิเสธ").setStyle(ButtonStyle.Danger)
       );
 
       await adminChannel.send({ embeds: [embed], components: [row] });
@@ -494,80 +399,59 @@ client.on("messageCreate", async (msg) => {
       console.error("❌ ไม่พบห้องแอดมินที่กำหนด");
     }
 
-    // ลบข้อมูล userGuildMap หลังส่งสำเร็จ
     userGuildMap.delete(msg.author.id);
-
   } catch (err) {
     console.error("❌ Error sending to admin channel:", err);
     msg.reply("⚠️ ส่งสลิปสำเร็จแล้ว แต่ไม่สามารถแจ้งแอดมินได้ กรุณาติดต่อแอดมินโดยตรง 💬");
   }
-
 });
 
 // ================================
-// ปุ่ม "ยืนยัน / ปฏิเสธ" ฝั่งแอดมิน
+// ปุ่ม "ยืนยัน / ปฏิเสธ" ฝั่งแอดมิน (ใช้ getRows เร็ว ๆ)
 // ================================
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton()) return;
   const parts = interaction.customId.split("_");
   const action = parts[0];
   if (!["approve", "reject"].includes(action)) return;
-  
+
   const userId = parts[1];
   const amount = parts[2];
   const guildId = parts[3] || interaction.guild?.id;
 
-  await sheet.loadHeaderRow();
-  await sheet.loadCells(`A1:H${sheet.rowCount}`);
-  const header = sheet.headerValues;
-  const userCol = header.indexOf("User");
-  const statusCol = header.indexOf("Status");
-  const coinsCol = header.indexOf("Coins");
-  const guildCol = header.indexOf("GuildID");
-
-  let foundRow = null;
-  for (let i = sheet.rowCount - 1; i >= 1; i--) {
-    const userCell = sheet.getCell(i, userCol);
-    const statusCell = sheet.getCell(i, statusCol);
-    const guildCell = sheet.getCell(i, guildCol);
-    const cellGuildId = String(guildCell.value || "").trim();
-    
-    if (
-      String(userCell.value).trim() === userId &&
-      statusCell.value === "รออนุมัติ" &&
-      (!guildId || cellGuildId === guildId)
-    ) {
-      foundRow = i;
-      break;
-    }
-  }
+  const rows = await sheet.getRows();
+  // หาแถว slip ล่าสุดของ user ใน guild นี้ที่ยัง "รออนุมัติ"
+  const candidate = rows
+    .filter(
+      (r) =>
+        normId(r.User) === normId(userId) &&
+        normId(r.GuildID) === normId(guildId) &&
+        String(r.Status || "").trim() === "รออนุมัติ"
+    )
+    .pop(); // เอาตัวท้ายสุด (ล่าสุด)
 
   const user = await client.users.fetch(userId);
-  if (!foundRow)
-    return interaction.reply({
-      content: "❌ ไม่พบรายการ หรือถูกยืนยันไปแล้ว",
-      ephemeral: true,
-    });
+  if (!candidate) {
+    return interaction.reply({ content: "❌ ไม่พบรายการ หรือถูกยืนยันไปแล้ว", ephemeral: true });
+  }
 
   if (action === "approve") {
     const coins = Math.floor(parseFloat(amount) / 50);
-    sheet.getCell(foundRow, coinsCol).value = coins;
-    sheet.getCell(foundRow, statusCol).value = "ยืนยันแล้ว";
-    await sheet.saveUpdatedCells();
+    candidate.Coins = coins;
+    candidate.Status = "ยืนยันแล้ว";
+    await candidate.save();
 
     await interaction.update({
       content: `✅ แอดมิน ${interaction.user.username} ยืนยันสลิปของ ${user.username} แล้ว!`,
       components: [],
     });
 
-    await user.send(
-      `💚 ยอด **${amount} บาท** ของคุณได้รับการยืนยันแล้ว! (+${coins} coins) 🎉`,
-    );
+    await user.send(`💚 ยอด **${amount} บาท** ของคุณได้รับการยืนยันแล้ว! (+${coins} coins) 🎉`);
   }
 
   if (action === "reject") {
-    sheet.getCell(foundRow, statusCol).value = "ปฏิเสธ";
-    await sheet.saveUpdatedCells();
+    candidate.Status = "ปฏิเสธ";
+    await candidate.save();
 
     await interaction.update({
       content: `❌ แอดมิน ${interaction.user.username} ปฏิเสธสลิปของ ${user.username}`,
