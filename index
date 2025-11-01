@@ -198,13 +198,6 @@ if (!found) {
 
 msg.channel.send("🔄 รีเซ็ตจำนวนหมุนของเซิร์ฟนี้กลับเป็น 0 แล้วค่ะ 💫");
 }
-  if (found) {
-    await sheetServer.saveUpdatedCells();
-    msg.channel.send("🔄 รีเซ็ตจำนวนหมุนของเซิร์ฟนี้กลับเป็น 0 แล้วค่ะ 💫");
-}   else {
-    msg.channel.send("⚠️ ไม่พบเซิร์ฟนี้ในแท็บ ServerCount ค่ะ~");
-}
-    
   }
 });
 
@@ -255,7 +248,6 @@ client.on("interactionCreate", async (interaction) => {
       });
       return;
     }
-    );
 
     if (currentCount >= GACHA_LIMIT) {
       await interaction.editReply({
