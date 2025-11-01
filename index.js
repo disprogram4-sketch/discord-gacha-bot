@@ -233,7 +233,7 @@ const userRows = rows.filter(r =>
       return;
     }
 
-  const totalCoins = userRows.reduce((sum, r) => sum + r.coins, 0);
+  const totalCoins = userRows.reduce((sum, r) => sum + parseInt(r.Coins || 0), 0);
     if (totalCoins < 1) {
       await interaction.editReply({
         content: "❌ คุณไม่มีคอยน์เพียงพอ!",
@@ -250,16 +250,15 @@ const userRows = rows.filter(r =>
 
     let remainingToUse = 1;
     for (const row of userRows) {
-      if (remainingToUse <= 0) break;
-      const available = row.coins;
-      if (available > 0) {
-        const deduct = Math.min(available, remainingToUse);
-        sheet.getCell(row.rowIndex, coinsCol).value = available - deduct;
-        remainingToUse -= deduct;
-      }
-    }
-
-    await sheet.saveUpdatedCells();
+  if (remainingToUse <= 0) break;
+  const available = parseInt(row.Coins || 0);
+  if (available > 0) {
+    const deduct = Math.min(available, remainingToUse);
+    row.Coins = available - deduct;
+    await row.save();
+    remainingToUse -= deduct;
+  }
+}
     const newCount = currentCount + 1;
     gachaCountPerGuild.set(guildId, newCount);
 
@@ -300,17 +299,11 @@ if (foundRow) {
   gachaCountPerGuild.set(guildId, 1);
   console.log(`🆕 เพิ่ม GuildID ${normalizedGuildId} และตั้งค่า GachaCount = 1`);
 }
-
-
     const reward = randomReward();
-
-   await sheet.saveUpdatedCells();
-
     // คำนวณใหม่จากข้อมูลจริง
     let remainingCoins = 0;
-    for (const serverRows of userRows) {
-      const value = parseInt(sheet.getCell(row.rowIndex, coinsCol).value || 0);
-      remainingCoins += value;
+      for (const r of userRows) {
+      remainingCoins += parseInt(r.Coins || 0);
     }
 
     if (newCount === GACHA_LIMIT)
