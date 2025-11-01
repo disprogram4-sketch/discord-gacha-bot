@@ -168,19 +168,25 @@ client.on("messageCreate", async (msg) => {
     gachaCountPerGuild.set(guildId, 0);
 
     // 🧹 ลบข้อความกาชาทั้งหมดในช่องนั้น
-    try {
-      const fetchedMessages = await msg.channel.messages.fetch({ limit: 100 });
-      const gachaMessages = fetchedMessages.filter(m =>
-        m.author.id === client.user.id && m.content.includes("หมุนกาชาได้")
-      );
+try {
+  const fetchedMessages = await msg.channel.messages.fetch({ limit: 100 });
+  const gachaMessages = fetchedMessages.filter(m =>
+    m.author.id === client.user.id &&
+    (
+      m.content.includes("คุณได้รับรางวัล") || // ✅ ลบข้อความสุ่ม
+      m.embeds.some(e => e.title?.includes("กาชา")) // เผื่อข้อความแบบ embed
+    )
+  );
 
-      for (const [id, message] of gachaMessages) {
-        await message.delete().catch(() => {});
-      }
-    } catch (err) {
-      console.error("❌ เกิดข้อผิดพลาดระหว่างลบข้อความ:", err);
-      msg.channel.send("⚠️ เคลียร์ข้อความไม่สำเร็จ แต่รีเซ็ตโควต้าหมุนเรียบร้อยแล้วค่ะ~");
-    }
+  for (const [id, message] of gachaMessages) {
+    await message.delete().catch(() => {});
+  }
+
+  msg.channel.send(`🧹 ลบข้อความสุ่มทั้งหมด ${gachaMessages.size} ข้อความแล้วค่ะ 💚`);
+} catch (err) {
+  console.error("❌ เกิดข้อผิดพลาดระหว่างลบข้อความ:", err);
+  msg.channel.send("⚠️ เคลียร์ข้อความไม่สำเร็จ แต่รีเซ็ตโควต้าหมุนเรียบร้อยแล้วค่ะ~");
+}
 
    // ✅ อัปเดตค่าในแท็บ ServerCount ให้กลับเป็น 0 ด้วย
     await sheetServer.loadHeaderRow();
@@ -199,7 +205,7 @@ client.on("messageCreate", async (msg) => {
         GachaCount: 0
       });
       gachaCountPerGuild.set(guildId, 0);
-      msg.channel.send("🆕 เพิ่ม Guild ใหม่พร้อมรีเซ็ตค่า 0 แล้วค่ะ 💚");
+      msg.channel.send("🔄 รีเซ็ตจำนวนหมุนของเซิร์ฟนี้กลับเป็น 0 แล้วค่ะ 💫");
     }
     }
   }
