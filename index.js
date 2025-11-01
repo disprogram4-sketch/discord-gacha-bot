@@ -221,10 +221,14 @@ client.on("interactionCreate", async (interaction) => {
 
    // ✅ ใช้ getRows() แทน loadCells()
 const rows = await sheet.getRows();
-const userRows = rows.filter(r =>
-  String(r.User || "").trim() === String(interaction.user.id) &&
-  String(r.GuildID || "").trim() === guildId
-);
+const userRows = rows.filter(r => {
+  const userId = String(r.User || "").trim();
+  const sheetGuildId = String(r.GuildID || "").trim();
+  return (
+    userId === String(interaction.user.id) &&
+    (sheetGuildId === String(guildId) || sheetGuildId === "" || !sheetGuildId)
+  );
+});
 
     if (userRows.length === 0) {
       await interaction.editReply({
