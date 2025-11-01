@@ -214,44 +214,53 @@ client.on("interactionCreate", async (interaction) => {
   // ================================
   // 🎰 กาชา (ใช้คอยน์ไล่จากแถวบนลงล่าง - Per Server)
   // ================================
-  if (interaction.customId === "gacha") {
-    await interaction.deferReply({ ephemeral: false });
-    const guildId = interaction.guild?.id || "DM";
-    const currentCount = gachaCountPerGuild.get(guildId) || 0;
+if (interaction.customId === "gacha") {
+  await interaction.deferReply({ ephemeral: false });
+  const guildId = interaction.guild?.id || "DM";
+  const currentCount = gachaCountPerGuild.get(guildId) || 0;
 
-   // ✅ ใช้ getRows() แทน loadCells()
-const rows = await sheet.getRows();
-const userRows = rows.filter(r => {
-  const userId = String(r.User || "").trim();
-  const sheetGuildId = String(r.GuildID || "").trim();
-  return (
-    userId === String(interaction.user.id) &&
-    (sheetGuildId === String(guildId) || sheetGuildId === "" || !sheetGuildId)
-  );
-});
+  // ✅ โหลดข้อมูลสดจากชีท
+  await sheet.loadHeaderRow();
+  await sheet.loadCells(`A1:H${sheet.rowCount}`);
+  const header = sheet.headerValues;
+  const userCol = header.indexOf("User");
+  const coinsCol = header.indexOf("Coins");
+  const guildCol = header.indexOf("GuildID");
 
-    if (userRows.length === 0) {
-      await interaction.editReply({
-        content: "❌ ยังไม่มีข้อมูลของคุณในระบบ ลองเติมก่อนนะ 💚",
-      });
-      return;
+  let totalCoins = 0;
+  let userRows = [];
+
+  // 🔍 หาข้อมูลเหมือนกับบล็อก "เช็คยอดเงิน"
+  for (let i = 1; i < sheet.rowCount; i++) {
+    const userCell = sheet.getCell(i, userCol);
+    const coinsCell = sheet.getCell(i, coinsCol);
+    const guildCell = sheet.getCell(i, guildCol);
+    const userValue = String(userCell.value || "").trim();
+    const guildValue = String(guildCell.value || "").trim();
+
+    if (userValue === String(interaction.user.id) && (guildValue === guildId || !guildValue)) {
+      const coins = parseInt(coinsCell.value || 0);
+      totalCoins += coins;
+      userRows.push({ rowIndex: i, coinsCell, coins });
     }
+  }
 
-  const totalCoins = userRows.reduce((sum, r) => sum + parseInt(r.Coins || 0), 0);
-    if (totalCoins < 1) {
-      await interaction.editReply({
-        content: "❌ คุณไม่มีคอยน์เพียงพอ!",
-      });
-      return;
-    }
+  if (userRows.length === 0) {
+    await interaction.editReply({ content: "❌ ยังไม่มีข้อมูลของคุณในระบบ ลองเติมก่อนนะ 💚" });
+    return;
+  }
 
-    if (currentCount >= GACHA_LIMIT) {
-      await interaction.editReply({
-        content: "🔒 ครบโควต้า 5 ครั้งแล้ว รอรีเซ็ตก่อนนะ 💚",
-      });
-      return;
-    }
+  if (totalCoins < 1) {
+    await interaction.editReply({ content: "❌ คุณไม่มีคอยน์เพียงพอ!" });
+    return;
+  }
 
+  if (currentCount >= GACHA_LIMIT) {
+    await interaction.editReply({ content: "🔒 ครบโควต้า 5 ครั้งแล้ว รอรีเซ็ตก่อนนะ 💚" });
+    return;
+  } 
+}
+  
     let remainingToUse = 1;
     for (const row of userRows) {
   if (remainingToUse <= 0) break;
