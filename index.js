@@ -292,8 +292,9 @@ client.on("interactionCreate", async (interaction) => {
     const reward = randomReward();
 
     await interaction.editReply({
-      content: `🎲 คุณได้รับรางวัล: **${reward}** 🎉`,
-    });
+  content: `🎲 คุณได้รับรางวัล: **${reward}** 🎉  
+  📊 หมุนกาชาไปแล้ว **${newCount}/${GACHA_LIMIT}** ครั้ง 💎`,
+});
 
     if (newCount === GACHA_LIMIT)
       interaction.channel.send("🔒 ครบ 5 ครั้งแล้ว รอบนี้ถูกล็อกไว้จนกว่าเจ้าของจะรีเซ็ตค่ะ 💚");
