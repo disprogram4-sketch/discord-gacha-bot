@@ -62,13 +62,16 @@ if (!sheetServer) {
   console.log("📘 โหลดแท็บ ServerCount สำเร็จ!");
   
   // ✅ โหลดข้อมูล GachaCount จากแท็บ ServerCount ทันทีตอนบอทเริ่มทำงาน
+   await sheetServer.loadHeaderRow();
   const rows = await sheetServer.getRows();
   for (const row of rows) {
     const guildId = String(row.GuildID || "").trim();
     const count = parseInt(row.GachaCount || 0);
-    if (guildId) gachaCountPerGuild.set(guildId, count);
-}
-console.log(`📊 โหลดค่า GachaCount จาก ServerCount แล้ว (${rows.length} เซิร์ฟ)`);
+    if (guildId && !isNaN(count)) {
+      gachaCountPerGuild.set(guildId, count);
+    }
+  }
+  console.log(`📊 โหลดค่า GachaCount จาก ServerCount แล้ว (${rows.length} เซิร์ฟ)`)
 }
 
 // ================================
@@ -180,15 +183,9 @@ client.on("messageCreate", async (msg) => {
     }
 
    // ✅ อัปเดตค่าในแท็บ ServerCount ให้กลับเป็น 0 ด้วย
+    await sheetServer.loadHeaderRow();
     const rows = await sheetServer.getRows();
-    let foundRow = null;
-
-    for (const row of rows) {
-      if (String(row.GuildID).trim() === String(guildId).trim()) {
-        foundRow = row;
-          break;
-      }
-    }
+    const foundRow = rows.find(r => String(r.GuildID || "").trim() === String(guildId).trim());
 
     if (foundRow) {
       foundRow.GachaCount = 0;
@@ -197,12 +194,16 @@ client.on("messageCreate", async (msg) => {
       msg.channel.send("🔄 รีเซ็ตจำนวนหมุนของเซิร์ฟนี้กลับเป็น 0 แล้วค่ะ 💫");
       console.log(`♻️ รีเซ็ต GachaCount เซิร์ฟ ${guildId} เป็น 0`);
     } else {
-      await sheetServer.addRow({ GuildID: guildId, GachaCount: 0 });
+      await sheetServer.addRow({
+        GuildID: String(guildId).trim(),
+        GachaCount: 0
+      });
       gachaCountPerGuild.set(guildId, 0);
       msg.channel.send("🆕 เพิ่ม Guild ใหม่พร้อมรีเซ็ตค่า 0 แล้วค่ะ 💚");
     }
+    }
   }
-});
+);
 
 // ================================
 // การตอบเมื่อกดปุ่ม
@@ -276,15 +277,9 @@ client.on("interactionCreate", async (interaction) => {
     gachaCountPerGuild.set(guildId, newCount);
 
     // ✅ อัปเดตจำนวนกาชาต่อเซิร์ฟในแท็บ ServerCount
+    await sheetServer.loadHeaderRow();
     const rows = await sheetServer.getRows();
-    let foundRow = null;
-
-    for (const row of rows) {
-      if (String(row.GuildID).trim() === String(guildId).trim()) {
-        foundRow = row;
-        break;
-      }
-    }
+    const foundRow = rows.find(r => String(r.GuildID || "").trim() === String(guildId).trim());
 
     if (foundRow) {
       const current = parseInt(foundRow.GachaCount || 0) || 0;
@@ -293,17 +288,25 @@ client.on("interactionCreate", async (interaction) => {
       gachaCountPerGuild.set(guildId, current + 1);
       console.log(`🔢 อัปเดต GachaCount เซิร์ฟ ${guildId} → ${current + 1}`);
     } else {
-      await sheetServer.addRow({ GuildID: guildId, GachaCount: 1 });
+      // ถ้าไม่มี row เดิมจริง ๆ ค่อยเพิ่มใหม่
+      await sheetServer.addRow({
+        GuildID: String(guildId).trim(),
+        GachaCount: 1
+      });
       gachaCountPerGuild.set(guildId, 1);
       console.log(`🆕 เพิ่ม GuildID ${guildId} และตั้งค่า GachaCount = 1`);
     }
 
     const reward = randomReward();
 
-    const newTotal = totalCoins - 1;
-    await interaction.editReply({
-      content: `🎲 ${interaction.user} หมุนกาชาได้ **${reward}**\n(หมุนครั้งที่ ${newCount}/${GACHA_LIMIT})\n💰 คอยน์คงเหลือ: ${newTotal}`,
-    });
+   await sheet.saveUpdatedCells();
+
+    // คำนวณใหม่จากข้อมูลจริง
+    let remainingCoins = 0;
+    for (const row of userRows) {
+      const value = parseInt(sheet.getCell(row.rowIndex, coinsCol).value || 0);
+      remainingCoins += value;
+    }
 
     if (newCount === GACHA_LIMIT)
       interaction.channel.send(
