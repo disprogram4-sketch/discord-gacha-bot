@@ -242,6 +242,7 @@ client.on("interactionCreate", async (interaction) => {
       return;
     }
 
+  const totalCoins = userRows.reduce((sum, r) => sum + r.coins, 0);
     if (totalCoins < 1) {
       await interaction.editReply({
         content: "❌ คุณไม่มีคอยน์เพียงพอ!",
